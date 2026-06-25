@@ -9,7 +9,11 @@
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; background: #0a0f1e; color: #e2e8f0;
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; padding: 20px 14px; }
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+  #app { max-width: 480px; margin: 0 auto; padding: 16px 14px 40px; }
+  .verbadge { position: fixed; top: 8px; left: 10px; z-index: 100; font-size: 11px;
+    font-weight: 700; color: #818cf8; background: rgba(17,24,39,0.9); padding: 3px 8px;
+    border-radius: 6px; border: 1px solid #312e81; }
   .card { background: #111827; border-radius: 14px; padding: 16px; margin-bottom: 16px; border: 1px solid #1e293b; }
   .lbl { font-size: 11px; color: #64748b; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px; font-weight: 600; }
   select, input[type=number], input[type=text] { width: 100%; background: #0a0f1e; border: 1px solid #334155;
@@ -36,12 +40,15 @@
 </style>
 </head>
 <body>
+<div class="verbadge" id="verbadge">v1.0</div>
 <div id="app"></div>
 
 <script>
 // ════════════════════════════════════════════════════════════════════════════
 //  UNIVERSAL TENNIS MATCH SIMULATOR — Standalone + api-tennis.com live
 // ════════════════════════════════════════════════════════════════════════════
+
+const APP_VERSION = "1.0";
 
 const SURFACES = {
   grass: { label: "🌿 Трава", serveBoost: 1.04, returnDampen: 0.97 },
@@ -515,6 +522,7 @@ function defaultState() {
     apiKey: API_KEY, apiStatus: "", liveMatches: [],
     matchStats: null, matchStatsMsg: "", proxyUrl: PROXY_URL,
     collapseA: false, collapseB: false, fromLive: false,
+    activeMatchId: null, autoRefresh: false, refreshSec: 30, lastRefresh: "",
   };
 }
 
@@ -738,6 +746,25 @@ function apiCard() {
       [el("option",{value:-1},["— выбрать —"])].concat(
         S.liveMatches.map((m,i)=>el("option",{value:i},[(m.home+" vs "+m.away+" ("+(m.finalResult||"")+")")])))));
   }
+  // Auto-refresh controls (only meaningful with an active loaded match)
+  if (S.activeMatchId) {
+    const intervals = [5,15,30,60];
+    kids.push(el("div",{style:"margin-top:12px;padding:10px;border:1px solid #1e293b;border-radius:10px"},[
+      el("div",{style:"display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"},[
+        el("div",{style:"font-size:12px;font-weight:600;color:"+(S.autoRefresh?"#4ade80":"#e2e8f0")},["🔄 Автообновление по API"]),
+        el("button",{class:"toggle",style:"width:48px;height:26px;background:"+(S.autoRefresh?"#16A34A":"#334155"),
+          onclick:()=>{S.autoRefresh=!S.autoRefresh;startAutoRefresh();render();}},
+          [el("span",{class:"knob",style:"width:20px;height:20px;left:"+(S.autoRefresh?"25px":"3px")})]),
+      ]),
+      el("div",{style:"font-size:10px;color:#64748b;margin-bottom:6px"},["Интервал (сек):"]),
+      el("div",{style:"display:flex;gap:6px"},
+        intervals.map(s=>el("button",{class:"pill"+(S.refreshSec===s?" on":""),style:"padding:7px 4px;font-size:12px",
+          onclick:()=>{S.refreshSec=s;if(S.autoRefresh)startAutoRefresh();render();}},[String(s)]))),
+      S.lastRefresh?el("div",{style:"font-size:10px;color:#38bdf8;margin-top:8px"},["📡 "+S.lastRefresh]):null,
+      el("div",{style:"font-size:10px;color:#475569;margin-top:8px;line-height:1.5"},
+        ["⚠️ 5 сек = ~720 запросов/час. На бесплатном тарифе лимит сгорит быстро. Выбирай интервал по своему тарифу."]),
+    ]));
+  }
   // In-match detailed form (paid tier)
   if (S.matchStatsMsg) {
     const isUnavail = S.matchStatsMsg.indexOf("недоступна")>=0;
@@ -780,6 +807,12 @@ async function loadLive() {
 function applyLiveMatch(idx) {
   if (idx < 0 || !S.liveMatches[idx]) return;
   const m = S.liveMatches[idx];
+  S.activeMatchId = m.id;
+  applyMatchData(m, true);
+}
+
+// Apply a match object to state. autoMomentum=true also pulls & applies p-b-p form.
+function applyMatchData(m, fetchStats) {
   const pA = matchPreset(m.home), pB = matchPreset(m.away);
   if (pA) { S.nameA = pA; S.statsA = Object.assign({}, PRESETS[pA]); }
   else { S.nameA = m.home; }   // keep current stats as fallback
@@ -795,16 +828,47 @@ function applyLiveMatch(idx) {
     (pA && pB ? " (оба в базе)" : " (часть игроков не в базе — статы по умолчанию, отредактируй вручную)");
   S.matchStats = null; S.matchStatsMsg = "";
   recompute();
-  // Try to pull detailed in-match form (works only on paid tiers with point-by-point)
-  S.matchStatsMsg = "Запрос детальной статистики матча…"; render();
-  fetchMatchStats(m.id).then(stats => {
-    if (stats) { S.matchStats = stats; S.matchStatsMsg = ""; }
-    else { S.matchStats = null; S.matchStatsMsg = "Детальная статистика недоступна (нужен платный тариф с point-by-point)."; }
+  if (fetchStats) {
+    S.matchStatsMsg = "Запрос детальной статистики матча…"; render();
+    fetchMatchStats(m.id).then(stats => {
+      if (stats) { S.matchStats = stats; S.matchStatsMsg = ""; }
+      else { S.matchStats = null; S.matchStatsMsg = "Детальная статистика недоступна (нужен платный тариф с point-by-point)."; }
+      render();
+    }).catch(() => {
+      S.matchStats = null; S.matchStatsMsg = "Детальная статистика недоступна.";
+      render();
+    });
+  }
+}
+
+// ── AUTO-REFRESH: re-fetch the active match every N seconds (live only) ──
+let refreshTimer = null;
+function startAutoRefresh() {
+  stopAutoRefresh();
+  if (!S.autoRefresh || !S.activeMatchId) return;
+  refreshTimer = setInterval(refreshActiveMatch, Math.max(5, S.refreshSec) * 1000);
+}
+function stopAutoRefresh() {
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+}
+async function refreshActiveMatch() {
+  if (!S.activeMatchId) return;
+  try {
+    const matches = await fetchLiveMatches();
+    const m = matches.find(x => String(x.id) === String(S.activeMatchId));
+    const t = new Date().toLocaleTimeString("ru-RU");
+    if (m) {
+      // Re-apply score (keep momentum if user already applied it manually)
+      applyMatchData(m, true);
+      S.lastRefresh = "обновлено " + t;
+    } else {
+      S.lastRefresh = "матч не найден (возможно завершён) — " + t;
+    }
     render();
-  }).catch(() => {
-    S.matchStats = null; S.matchStatsMsg = "Детальная статистика недоступна.";
+  } catch (e) {
+    S.lastRefresh = "ошибка обновления — " + new Date().toLocaleTimeString("ru-RU");
     render();
-  });
+  }
 }
 
 // Apply in-match form as a momentum nudge (rough — based on hold% & BP-save%).
@@ -957,9 +1021,11 @@ function resetDefaults() {
 
 function render() {
   const app = document.getElementById("app");
+  const vb = document.getElementById("verbadge");
+  if (vb) vb.textContent = "v" + APP_VERSION;
   app.innerHTML = "";
-  app.appendChild(el("div",{style:"margin-bottom:20px"},[
-    el("div",{class:"sub"},["Универсальный симулятор · Monte Carlo · 10 000 матчей"]),
+  app.appendChild(el("div",{style:"margin-bottom:20px;padding-top:8px"},[
+    el("div",{class:"sub"},["Универсальный симулятор · Monte Carlo · 10 000 матчей · v"+APP_VERSION]),
     el("h1",null,["🎾 Tennis Match Simulator"]),
   ]));
   app.appendChild(apiCard());
