@@ -40,7 +40,7 @@
 </style>
 </head>
 <body>
-<div class="verbadge" id="verbadge">v1.2</div>
+<div class="verbadge" id="verbadge">v1.3</div>
 <div id="app"></div>
 
 <script>
@@ -48,7 +48,7 @@
 //  UNIVERSAL TENNIS MATCH SIMULATOR — Standalone + api-tennis.com live
 // ════════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = "1.2";
+const APP_VERSION = "1.3";
 
 const SURFACES = {
   grass: { label: "🌿 Трава", serveBoost: 1.04, returnDampen: 0.97 },
@@ -580,7 +580,7 @@ function defaultState() {
     matchStats: null, matchStatsMsg: "", proxyUrl: PROXY_URL,
     collapseA: false, collapseB: false, fromLive: false,
     activeMatchId: null, autoRefresh: false, refreshSec: 30, lastRefresh: "",
-    nameFormat: "full",
+    nameFormat: "full", showRaw: false, rawMatch: null,
   };
 }
 
@@ -826,6 +826,12 @@ function apiCard() {
         intervals.map(s=>el("button",{class:"pill"+(S.refreshSec===s?" on":""),style:"padding:7px 4px;font-size:12px",
           onclick:()=>{S.refreshSec=s;if(S.autoRefresh)startAutoRefresh();render();}},[String(s)]))),
       S.lastRefresh?el("div",{id:"refresh-status",style:"font-size:10px;color:#38bdf8;margin-top:8px"},["📡 "+S.lastRefresh]):el("div",{id:"refresh-status",style:"font-size:10px;color:#38bdf8;margin-top:8px"},[""]),
+      el("div",{style:"display:flex;gap:6px;margin-top:8px"},[
+        el("button",{class:"pill",style:"flex:1;padding:8px;font-size:12px",onclick:refreshActiveMatch},["⟳ Обновить сейчас"]),
+        el("button",{class:"pill"+(S.showRaw?" on":""),style:"padding:8px 10px;font-size:12px",onclick:()=>{S.showRaw=!S.showRaw;render();}},["🔍"]),
+      ]),
+      S.showRaw&&S.rawMatch?el("div",{style:"margin-top:8px;padding:8px;background:#000;border-radius:6px;font-size:9px;color:#86efac;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto",
+        html:"<b style='color:#fbbf24'>Сырые данные матча из API:</b>\n"+JSON.stringify(S.rawMatch,null,1)}):null,
       el("div",{style:"font-size:10px;color:#475569;margin-top:8px;line-height:1.5"},
         ["⚠️ 5 сек = ~720 запросов/час. На бесплатном тарифе лимит сгорит быстро. Выбирай интервал по своему тарифу."]),
     ]));
@@ -928,7 +934,10 @@ async function refreshActiveMatch() {
       S.setsA = lc.setsA; S.setsB = lc.setsB; S.gA = lc.gA; S.gB = lc.gB;
       S.tiebreak = lc.tiebreak; S.serverA = lc.serverA;
       if (lc.tiebreak) { S.tbA = lc.ptA; S.tbB = lc.ptB; } else { S.ptA = lc.ptA; S.ptB = lc.ptB; }
-      S.lastRefresh = "обновлено " + t;
+      // Show what was parsed so you can confirm it's actually changing:
+      const ptStr = lc.tiebreak ? ("ТБ "+lc.ptA+":"+lc.ptB) : (PTS[lc.ptA]+":"+PTS[lc.ptB]);
+      S.lastRefresh = "обновлено "+t+" · счёт "+lc.setsA+"-"+lc.setsB+", гейм "+lc.gA+"-"+lc.gB+", "+ptStr;
+      S.rawMatch = m; // keep raw for debug view
       // Pull fresh in-match form quietly, then silent-recompute
       fetchMatchStats(m.id).then(stats => {
         if (stats) S.matchStats = stats;
@@ -1122,7 +1131,8 @@ function render() {
     app.appendChild(playerSelect("B"));
   }
   app.appendChild(momH2HCard());
-  app.appendChild(liveCard());
+  const liveContainer = el("div",{id:"live-container"},[liveCard()]);
+  app.appendChild(liveContainer);
   app.appendChild(el("button",{class:"runbtn",onclick:recompute},["🔄 Пересчитать (новая выборка)"]));
   app.appendChild(el("button",{class:"copybtn",style:S.copied?"border-color:#4ade80;background:#14532d;color:#4ade80":"",onclick:copyParams},
     [S.copied?"✅ Скопировано!":"📋 Скопировать параметры и результат"]));
@@ -1141,6 +1151,9 @@ function silentRecompute() {
   S.result = runSim(buildCfg(), 10000);
   const rc = document.getElementById("results-container");
   if (rc) { rc.innerHTML = ""; rc.appendChild(resultsBlock()); }
+  // Refresh the live-score card so updated sets/games/points show (the bug fix):
+  const lc = document.getElementById("live-container");
+  if (lc) { lc.innerHTML = ""; lc.appendChild(liveCard()); }
   // update the in-match form block too (it lives in the API card) — light touch:
   const statusEl = document.getElementById("refresh-status");
   if (statusEl) statusEl.textContent = S.lastRefresh ? ("📡 " + S.lastRefresh) : "";
