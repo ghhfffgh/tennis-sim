@@ -514,6 +514,7 @@ function defaultState() {
     result: null, copied: false,
     apiKey: API_KEY, apiStatus: "", liveMatches: [],
     matchStats: null, matchStatsMsg: "", proxyUrl: PROXY_URL,
+    collapseA: false, collapseB: false, fromLive: false,
   };
 }
 
@@ -588,6 +589,25 @@ function playerSelect(side) {
   const cur = side === "A" ? S.nameA : S.nameB;
   const stats = side === "A" ? S.statsA : S.statsB;
   const col = side === "A" ? colA : colB;
+  const collapsed = side === "A" ? S.collapseA : S.collapseB;
+  const toggle = () => { if (side === "A") S.collapseA = !S.collapseA; else S.collapseB = !S.collapseB; render(); };
+
+  // Clickable header — shows player name + collapse arrow
+  const header = el("div", {
+    style: "display:flex;justify-content:space-between;align-items:center;cursor:pointer",
+    onclick: toggle,
+  }, [
+    el("div", { style:"display:flex;flex-direction:column" }, [
+      el("span", { class:"lbl", style:"color:"+col+";margin-bottom:2px" }, ["Игрок "+side]),
+      collapsed ? el("span", { style:"font-size:15px;font-weight:700;color:#f1f5f9" }, [cur]) : null,
+    ]),
+    el("span", { style:"font-size:18px;color:#64748b" }, [collapsed ? "▸" : "▾"]),
+  ]);
+
+  if (collapsed) {
+    return el("div", { class:"card", style:"border-top:3px solid "+col }, [header]);
+  }
+
   const sel = el("select", { onchange: e => setPlayer(side, e.target.value) },
     PRESET_NAMES.map(n => { const o = el("option", { value: n }, [n]); if (n === cur) o.selected = true; return o; }));
   const pctFields = [["1-я подача","fsIn"],["Очки 1-й","fsWin"],["Очки 2-й","ssWin"],["Приём 1-й","rfWin"],["Приём 2-й","rsWin"]];
@@ -598,7 +618,8 @@ function playerSelect(side) {
         oninput: e => { stats[key] = parseFloat(e.target.value)||0; recompute(); } })
     ]));
   return el("div", { class:"card", style:"border-top:3px solid "+col }, [
-    el("div", { class:"lbl", style:"color:"+col }, ["Игрок "+side]),
+    header,
+    el("div", { style:"height:10px" }),
     sel,
     el("div", { style:"height:10px" }),
     ...fieldEls,
@@ -799,6 +820,10 @@ function applyMatchStatsToMomentum() {
   S.momA = toMom(ms.A);
   S.momB = toMom(ms.B);
   S.matchStatsMsg = "Форма матча применена к моментуму (грубая оценка по удержанию подачи).";
+  // Collapse both player editor blocks and mark that names come from a live match.
+  S.collapseA = true;
+  S.collapseB = true;
+  S.fromLive = true;
   recompute();
 }
 
@@ -811,13 +836,17 @@ function resultsBlock() {
   // Win prob
   blocks.push(el("div",{class:"card"},[
     el("div",{class:"lbl",style:"text-align:center"},["Вероятность победы в матче"]),
+    S.fromLive?el("div",{style:"text-align:center;font-size:10px;color:#38bdf8;margin-bottom:8px;font-weight:600"},["📡 игроки загружены из live-матча"]):null,
+    el("div",{style:"display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"},[
+      el("span",{style:"font-size:14px;font-weight:700;color:"+colA},[S.nameA]),
+      el("span",{style:"font-size:14px;font-weight:700;color:"+colB},[S.nameB]),
+    ]),
     el("div",{style:"display:flex;justify-content:space-between;margin-bottom:10px"},[
       el("span",{style:"font-weight:800;font-size:32px;color:"+colA},[r.pctA+"%"]),
       el("span",{style:"font-weight:800;font-size:32px;color:"+colB},[r.pctB+"%"]),
     ]),
     el("div",{style:"display:flex;border-radius:8px;overflow:hidden;height:20px;margin-bottom:8px"},[bar(r.pctA,colA),bar(r.pctB,colB)]),
-    el("div",{style:"display:flex;justify-content:space-between;font-size:13px;color:#94a3b8"},[el("span",null,[S.nameA]),el("span",null,[S.nameB])]),
-    S.live?el("div",{style:"margin-top:10px;font-size:11px;color:#fbbf24;text-align:center"},["🔴 с текущего счёта "+S.setsA+"–"+S.setsB+" · "+S.gA+"–"+S.gB]):null,
+    S.live?el("div",{style:"margin-top:6px;font-size:11px;color:#fbbf24;text-align:center"},["🔴 с текущего счёта "+S.setsA+"–"+S.setsB+" · "+S.gA+"–"+S.gB]):null,
   ]));
   // Set xG
   blocks.push(el("div",{class:"card",style:"border:1px solid #155e75;background:linear-gradient(135deg,#083344,#111827)"},[
