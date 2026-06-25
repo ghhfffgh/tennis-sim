@@ -40,7 +40,7 @@
 </style>
 </head>
 <body>
-<div class="verbadge" id="verbadge">v1.0</div>
+<div class="verbadge" id="verbadge">v1.1</div>
 <div id="app"></div>
 
 <script>
@@ -48,7 +48,7 @@
 //  UNIVERSAL TENNIS MATCH SIMULATOR — Standalone + api-tennis.com live
 // ════════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = "1.0";
+const APP_VERSION = "1.1";
 
 const SURFACES = {
   grass: { label: "🌿 Трава", serveBoost: 1.04, returnDampen: 0.97 },
@@ -298,6 +298,63 @@ Object.keys(PRESETS).forEach(k => {
 });
 const PRESET_NAMES = Object.keys(PRESETS).sort((a,b) => a.localeCompare(b,"en",{sensitivity:"base"}));
 
+// Full first names for disambiguation (surname-only display can collide).
+// Where known, maps the preset key → first name. Extend as needed.
+const FIRST_NAMES = {
+  "Sinner 🇮🇹":"Jannik","Alcaraz 🇪🇸":"Carlos","Zverev 🇩🇪":"Alexander",
+  "Auger-Aliassime 🇨🇦":"Felix","Shelton 🇺🇸":"Ben","Fritz 🇺🇸":"Taylor",
+  "De Minaur 🇦🇺":"Alex","Medvedev 🇷🇺":"Daniil","Djokovic 🇷🇸":"Novak",
+  "Cobolli 🇮🇹":"Flavio","Bublik 🇰🇿":"Alexander","Lehecka 🇨🇿":"Jiri",
+  "Rublev 🇷🇺":"Andrey","Ruud 🇳🇴":"Casper","Khachanov 🇷🇺":"Karen",
+  "Musetti 🇮🇹":"Lorenzo","Mensik 🇨🇿":"Jakub","Darderi 🇮🇹":"Luciano",
+  "Tien 🇺🇸":"Learner","Vacherot 🇲🇨":"Valentin","Fils 🇫🇷":"Arthur",
+  "Davidovich F. 🇪🇸":"Alejandro","Jodar 🇪🇸":"Martin","Rinderknech 🇫🇷":"Arthur",
+  "Fonseca 🇧🇷":"Joao","Tiafoe 🇺🇸":"Frances","Cerundolo F. 🇦🇷":"Francisco",
+  "Paul 🇺🇸":"Tommy","Norrie 🇬🇧":"Cameron","Etcheverry 🇦🇷":"Tomas",
+  "Tabilo 🇨🇱":"Alejandro","Nakashima 🇺🇸":"Brandon","Humbert 🇫🇷":"Ugo",
+  "Arnaldi 🇮🇹":"Matteo","Griekspoor 🇳🇱":"Tallon","Moutet 🇫🇷":"Corentin",
+  "Michelsen 🇺🇸":"Alex","Shapovalov 🇨🇦":"Denis","Machac 🇨🇿":"Tomas",
+  "Munar 🇪🇸":"Jaume","Mannarino 🇫🇷":"Adrian","Sonego 🇮🇹":"Lorenzo",
+  "Borges 🇵🇹":"Nuno","Kyrgios 🇦🇺":"Nick","Fucsovics 🇭🇺":"Marton",
+  "Shelbayh 🇯🇴":"Abdullah","Marozsan 🇭🇺":"Fabian","Molcan 🇸🇰":"Alex",
+  "Struff 🇩🇪":"Jan-Lennard","Landaluce 🇪🇸":"Martin","Kecmanovic 🇷🇸":"Miomir",
+  "Medjedovic 🇷🇸":"Hamad","Baez 🇦🇷":"Sebastian","Tsitsipas 🇬🇷":"Stefanos",
+  "Dimitrov 🇧🇬":"Grigor","Mpetshi Perricard 🇫🇷":"Giovanni","Navone 🇦🇷":"Mariano",
+  "Carballes Baena 🇪🇸":"Roberto","Martinez 🇪🇸":"Pedro","Djere 🇷🇸":"Laslo",
+  "Bergs 🇧🇪":"Zizou","Spizzirri 🇺🇸":"Eliot","Nardi 🇮🇹":"Luca",
+  "Bellucci 🇮🇹":"Mattia","Comesana 🇦🇷":"Francisco","Walton 🇦🇺":"Adam",
+  "Kovacevic 🇺🇸":"Aleksandar","Van de Zandschulp 🇳🇱":"Botic","Brooksby 🇺🇸":"Jenson",
+  "Majchrzak 🇵🇱":"Kamil","Fearnley 🇬🇧":"Jacob","J. Cerundolo 🇦🇷":"Juan Manuel",
+  "Ugo Carabelli 🇦🇷":"Camilo","Shevchenko 🇰🇿":"Alexander","Collignon 🇧🇪":"Raphael",
+  "O'Connell 🇦🇺":"Christopher","Hanfmann 🇩🇪":"Yannick","Basavareddy 🇺🇸":"Nishesh",
+  "Prizmic 🇭🇷":"Dino","Faria 🇵🇹":"Jaime","Blockx 🇧🇪":"Alexander",
+  "Carreno Busta 🇪🇸":"Pablo","Wawrinka 🇨🇭":"Stan","Altmaier 🇩🇪":"Daniel",
+  "Dzumhur 🇧🇦":"Damir","Quinn 🇺🇸":"Ethan","Kopriva 🇨🇿":"Vit",
+};
+// Extract surname (strip flag emoji) and flag from a preset key.
+function nameParts(key) {
+  const m = key.match(/^(.+?)\s*([\u{1F1E6}-\u{1F1FF}]{2})?\s*$/u);
+  const surname = (m ? m[1] : key).trim();
+  const flag = m && m[2] ? m[2] : "";
+  return { surname, flag };
+}
+// Format a player's display name per the chosen mode.
+// modes: "surinit" (Surname I.), "initsur" (I. Surname), "surname", "full"
+function displayName(key) {
+  const { surname, flag } = nameParts(key);
+  const first = FIRST_NAMES[key] || "";
+  const fl = flag ? " " + flag : "";
+  const mode = S ? S.nameFormat : "full";
+  if (!first) return surname + fl;              // no first name known → surname only
+  switch (mode) {
+    case "surname": return surname + fl;
+    case "surinit": return surname + " " + first[0] + "." + fl;
+    case "initsur": return first[0] + ". " + surname + fl;
+    case "full":
+    default:        return first + " " + surname + fl;
+  }
+}
+
 // ─── HEAD-TO-HEAD DATABASE ────────────────────────────────────────────────────
 function h2hKey(nameA, nameB) {
   const a = nameA.split(" ")[0].toLowerCase(), b = nameB.split(" ")[0].toLowerCase();
@@ -523,6 +580,7 @@ function defaultState() {
     matchStats: null, matchStatsMsg: "", proxyUrl: PROXY_URL,
     collapseA: false, collapseB: false, fromLive: false,
     activeMatchId: null, autoRefresh: false, refreshSec: 30, lastRefresh: "",
+    nameFormat: "full",
   };
 }
 
@@ -607,7 +665,7 @@ function playerSelect(side) {
   }, [
     el("div", { style:"display:flex;flex-direction:column" }, [
       el("span", { class:"lbl", style:"color:"+col+";margin-bottom:2px" }, ["Игрок "+side]),
-      collapsed ? el("span", { style:"font-size:15px;font-weight:700;color:#f1f5f9" }, [cur]) : null,
+      collapsed ? el("span", { style:"font-size:15px;font-weight:700;color:#f1f5f9" }, [displayName(cur)]) : null,
     ]),
     el("span", { style:"font-size:18px;color:#64748b" }, [collapsed ? "▸" : "▾"]),
   ]);
@@ -641,8 +699,13 @@ function surfaceRow() {
       Object.keys(SURFACES).map(k =>
         el("button", { class:"pill"+(S.surface===k?" on":""), onclick:()=>{S.surface=k;recompute();} }, [SURFACES[k].label]))),
     el("div", { class:"lbl" }, ["Формат"]),
-    el("div", { style:"display:flex;gap:6px" },
+    el("div", { style:"display:flex;gap:6px;margin-bottom:14px" },
       [3,5].map(b => el("button", { class:"pill"+(S.bestOf===b?" on":""), onclick:()=>{S.bestOf=b;recompute();} }, ["Best of "+b]))),
+    el("div", { class:"lbl" }, ["Формат имён"]),
+    el("div", { style:"display:flex;gap:6px;flex-wrap:wrap" },
+      [["full","Имя Фамилия"],["initsur","И. Фамилия"],["surinit","Фамилия И."],["surname","Фамилия"]].map(
+        ([mode,label]) => el("button", { class:"pill"+(S.nameFormat===mode?" on":""),
+          style:"font-size:12px;padding:8px 6px", onclick:()=>{S.nameFormat=mode;render();} }, [label]))),
   ]);
 }
 
@@ -760,7 +823,7 @@ function apiCard() {
       el("div",{style:"display:flex;gap:6px"},
         intervals.map(s=>el("button",{class:"pill"+(S.refreshSec===s?" on":""),style:"padding:7px 4px;font-size:12px",
           onclick:()=>{S.refreshSec=s;if(S.autoRefresh)startAutoRefresh();render();}},[String(s)]))),
-      S.lastRefresh?el("div",{style:"font-size:10px;color:#38bdf8;margin-top:8px"},["📡 "+S.lastRefresh]):null,
+      S.lastRefresh?el("div",{id:"refresh-status",style:"font-size:10px;color:#38bdf8;margin-top:8px"},["📡 "+S.lastRefresh]):el("div",{id:"refresh-status",style:"font-size:10px;color:#38bdf8;margin-top:8px"},[""]),
       el("div",{style:"font-size:10px;color:#475569;margin-top:8px;line-height:1.5"},
         ["⚠️ 5 сек = ~720 запросов/час. На бесплатном тарифе лимит сгорит быстро. Выбирай интервал по своему тарифу."]),
     ]));
@@ -858,17 +921,32 @@ async function refreshActiveMatch() {
     const m = matches.find(x => String(x.id) === String(S.activeMatchId));
     const t = new Date().toLocaleTimeString("ru-RU");
     if (m) {
-      // Re-apply score (keep momentum if user already applied it manually)
-      applyMatchData(m, true);
+      // Update only the score fields silently (no full re-render, no flicker)
+      const lc = parseLiveToConfig(m);
+      S.setsA = lc.setsA; S.setsB = lc.setsB; S.gA = lc.gA; S.gB = lc.gB;
+      S.tiebreak = lc.tiebreak; S.serverA = lc.serverA;
+      if (lc.tiebreak) { S.tbA = lc.ptA; S.tbB = lc.ptB; } else { S.ptA = lc.ptA; S.ptB = lc.ptB; }
       S.lastRefresh = "обновлено " + t;
+      // Pull fresh in-match form quietly, then silent-recompute
+      fetchMatchStats(m.id).then(stats => {
+        if (stats) S.matchStats = stats;
+        silentRecompute();
+        updateRefreshStatus();
+      }).catch(() => { silentRecompute(); updateRefreshStatus(); });
+      silentRecompute();
+      updateRefreshStatus();
     } else {
       S.lastRefresh = "матч не найден (возможно завершён) — " + t;
+      updateRefreshStatus();
     }
-    render();
   } catch (e) {
     S.lastRefresh = "ошибка обновления — " + new Date().toLocaleTimeString("ru-RU");
-    render();
+    updateRefreshStatus();
   }
+}
+function updateRefreshStatus() {
+  const el = document.getElementById("refresh-status");
+  if (el) el.textContent = S.lastRefresh ? ("📡 " + S.lastRefresh) : "";
 }
 
 // Apply in-match form as a momentum nudge (rough — based on hold% & BP-save%).
@@ -902,8 +980,8 @@ function resultsBlock() {
     el("div",{class:"lbl",style:"text-align:center"},["Вероятность победы в матче"]),
     S.fromLive?el("div",{style:"text-align:center;font-size:10px;color:#38bdf8;margin-bottom:8px;font-weight:600"},["📡 игроки загружены из live-матча"]):null,
     el("div",{style:"display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"},[
-      el("span",{style:"font-size:14px;font-weight:700;color:"+colA},[S.nameA]),
-      el("span",{style:"font-size:14px;font-weight:700;color:"+colB},[S.nameB]),
+      el("span",{style:"font-size:14px;font-weight:700;color:"+colA},[displayName(S.nameA)]),
+      el("span",{style:"font-size:14px;font-weight:700;color:"+colB},[displayName(S.nameB)]),
     ]),
     el("div",{style:"display:flex;justify-content:space-between;margin-bottom:10px"},[
       el("span",{style:"font-weight:800;font-size:32px;color:"+colA},[r.pctA+"%"]),
@@ -1039,9 +1117,22 @@ function render() {
     [S.copied?"✅ Скопировано!":"📋 Скопировать параметры и результат"]));
   app.appendChild(el("button",{class:"copybtn",style:"border-color:#7f1d1d;color:#fca5a5;margin-top:-10px",onclick:resetDefaults},
     ["♻️ Сбросить к настройкам по умолчанию"]));
-  app.appendChild(resultsBlock());
+  const resultsContainer = el("div",{id:"results-container"},[resultsBlock()]);
+  app.appendChild(resultsContainer);
   app.appendChild(el("div",{style:"font-size:11px;color:#475569;line-height:1.6;padding:0 4px;margin-top:8px"},
     ["⚠️ Статистика игроков — реальные цифры 2026 (часть оценочная). Live через api-tennis.com при наличии ключа; иначе вводи счёт вручную. Не инвестиционная рекомендация."]));
+}
+
+// Silent update: recompute and refresh ONLY the results + the live-status line,
+// without re-rendering the whole page (no flicker, inputs/scroll preserved).
+function silentRecompute() {
+  saveState();
+  S.result = runSim(buildCfg(), 10000);
+  const rc = document.getElementById("results-container");
+  if (rc) { rc.innerHTML = ""; rc.appendChild(resultsBlock()); }
+  // update the in-match form block too (it lives in the API card) — light touch:
+  const statusEl = document.getElementById("refresh-status");
+  if (statusEl) statusEl.textContent = S.lastRefresh ? ("📡 " + S.lastRefresh) : "";
 }
 
 recompute();
