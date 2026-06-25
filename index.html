@@ -40,7 +40,7 @@
 </style>
 </head>
 <body>
-<div class="verbadge" id="verbadge">v1.1</div>
+<div class="verbadge" id="verbadge">v1.2</div>
 <div id="app"></div>
 
 <script>
@@ -48,7 +48,7 @@
 //  UNIVERSAL TENNIS MATCH SIMULATOR — Standalone + api-tennis.com live
 // ════════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = "1.1";
+const APP_VERSION = "1.2";
 
 const SURFACES = {
   grass: { label: "🌿 Трава", serveBoost: 1.04, returnDampen: 0.97 },
@@ -671,7 +671,9 @@ function playerSelect(side) {
   ]);
 
   if (collapsed) {
-    return el("div", { class:"card", style:"border-top:3px solid "+col }, [header]);
+    const twoCol = S.collapseA && S.collapseB;
+    const cardStyle = "border-top:3px solid "+col + (twoCol ? ";margin-bottom:0;padding:12px;height:100%" : "");
+    return el("div", { class:"card", style:cardStyle }, [header]);
   }
 
   const sel = el("select", { onchange: e => setPlayer(side, e.target.value) },
@@ -1108,8 +1110,17 @@ function render() {
   ]));
   app.appendChild(apiCard());
   app.appendChild(surfaceRow());
-  app.appendChild(playerSelect("A"));
-  app.appendChild(playerSelect("B"));
+  // Player blocks: if BOTH collapsed → two compact columns side by side.
+  // If either is expanded (editing) → stack full width for room.
+  if (S.collapseA && S.collapseB) {
+    app.appendChild(el("div",{style:"display:flex;gap:10px;margin-bottom:16px"},[
+      el("div",{style:"flex:1"},[playerSelect("A")]),
+      el("div",{style:"flex:1"},[playerSelect("B")]),
+    ]));
+  } else {
+    app.appendChild(playerSelect("A"));
+    app.appendChild(playerSelect("B"));
+  }
   app.appendChild(momH2HCard());
   app.appendChild(liveCard());
   app.appendChild(el("button",{class:"runbtn",onclick:recompute},["🔄 Пересчитать (новая выборка)"]));
