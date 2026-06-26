@@ -40,7 +40,7 @@
 </style>
 </head>
 <body>
-<div class="verbadge" id="verbadge">v1.3</div>
+<div class="verbadge" id="verbadge">v1.4</div>
 <div id="app"></div>
 
 <script>
@@ -48,7 +48,7 @@
 //  UNIVERSAL TENNIS MATCH SIMULATOR — Standalone + api-tennis.com live
 // ════════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = "1.3";
+const APP_VERSION = "1.4";
 
 const SURFACES = {
   grass: { label: "🌿 Трава", serveBoost: 1.04, returnDampen: 0.97 },
@@ -701,13 +701,8 @@ function surfaceRow() {
       Object.keys(SURFACES).map(k =>
         el("button", { class:"pill"+(S.surface===k?" on":""), onclick:()=>{S.surface=k;recompute();} }, [SURFACES[k].label]))),
     el("div", { class:"lbl" }, ["Формат"]),
-    el("div", { style:"display:flex;gap:6px;margin-bottom:14px" },
+    el("div", { style:"display:flex;gap:6px" },
       [3,5].map(b => el("button", { class:"pill"+(S.bestOf===b?" on":""), onclick:()=>{S.bestOf=b;recompute();} }, ["Best of "+b]))),
-    el("div", { class:"lbl" }, ["Формат имён"]),
-    el("div", { style:"display:flex;gap:6px;flex-wrap:wrap" },
-      [["full","Имя Фамилия"],["initsur","И. Фамилия"],["surinit","Фамилия И."],["surname","Фамилия"]].map(
-        ([mode,label]) => el("button", { class:"pill"+(S.nameFormat===mode?" on":""),
-          style:"font-size:12px;padding:8px 6px", onclick:()=>{S.nameFormat=mode;render();} }, [label]))),
   ]);
 }
 
